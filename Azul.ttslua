@@ -1,0 +1,17 @@
+function onLoad()
+    print ('Started :-)')
+    white_token = getObjectFromGUID('71bd9b')
+    card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
+    cardx = getObjectFromGUID('8259b9')
+    card1 = {pos = Vector(-46.45, 8.0, -26.85), rotation = 0, center={-34.4, 4.53, -15}}
+    card2 = {pos = Vector(22.32, 8.0, -26.85), rotation = 0, center={34.4, 4.53, -15}}
+    card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={}}
+    card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180}
+    printPosition(cardx.getPosition(), 'cardx')
+    cardx.setPosition({0,4.53,0})
+end
+
+function onObjectDrop(_, obj)
+    print('!', obj)
+    printPosition(obj.getPosition())
+end
