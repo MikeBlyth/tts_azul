@@ -28,7 +28,18 @@ function onLoad()
         eraseScriptingZones()
         createFactoryZones()
     end
+    follower = tilePool.takeObject({position={1,1,5}})
 end
+
+function onUpdate()
+    followObj(startToken, follower, Vector(9.24/4,0,0))
+end
+
+function followObj(target,follower, gap) -- (obj, obj, vector)
+    follower.setPosition(target.getPosition()+Vector(gap))
+    follower.setRotation(target.getRotation())
+end
+
 
 function onObjectDrop(_, obj)
     --printPosition(obj.getPosition())
