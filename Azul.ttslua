@@ -4,6 +4,7 @@ function onLoad()
     startToken.setName('Start token')
     gameTable = getObjectFromGUID('52fa59')
     tilePool = getObjectFromGUID('d101ec')
+    discards = getObjectFromGUID('c30f7d')
     tilePoolDiam = 8.3
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
     cardx = getObjectFromGUID('18a461')
@@ -13,20 +14,24 @@ function onLoad()
     card2 = {pos = Vector(22.32, 8.0, -26.85), rotation = 0, center={34.4, 4.53, -15}}
     card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={34.4, 4.53, 15}}
     card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180, center={-34.4, 4.53, 15}}
-    factory = getObjectFromGUID('cdf90f')
+    factory = getObjectFromGUID('8d86bf')
+    print(factory)
     printPosition(startToken.getPosition())
-
-    players = 4
-    placeFactories(players)
-    drawTiles()
-    eraseScriptingZones()
-    createFactoryZones()
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
+    -- get number of players
+    players = 4
+    doSetup = true
+    if doSetup then
+        placeFactories(players)
+        drawTiles()
+        eraseScriptingZones()
+        createFactoryZones()
+    end
 end
 
 function onObjectDrop(_, obj)
-    printPosition(obj.getPosition())
+    --printPosition(obj.getPosition())
 end
 
 function placeFactories(players)
@@ -38,6 +43,7 @@ function placeFactories(players)
     factories = {factory}
     for i, p in ipairs(factoryPos) do
         if i == 1 then
+            printPosition(p, 'factoryPos[1]')
             factory.setPosition(p)
             f = factory
         else
@@ -55,13 +61,52 @@ function drawTiles()
         broadcastToAll('Play all the tiles first', 'Red')
         return
     end
+    requiredTiles = #factoryPos * 4
+    if countItemsInBag(tilePool) < requiredTiles then
+        local totalTiles = countItemsInBag(tilePool) + countItemsInBag(discards)
+        transferBags(discards, tilePool, 0.02) -- put the discards into the pool again
+        print('Waiting')
+        -- Wait.condition(function() distributeTiles() end,
+        --                --function() return waitUntilFull(totalTiles) end,
+        --                function() return (waitUntilFull(totalTiles)) end,
+        --                2,
+        --                function() print ('Error - discards bag has not emptied, try manually') end)
+
+        Wait.time(function() distributeTiles() end, 2)
+        -- the condition function doesn't work ... something to do with counting while transferring
+        -- objects or ??? so we'll just have to use a time delay; might be able to rig up something
+        -- with a coroutine, check frame by frame, but ...
+    else
+        distributeTiles()
+    end
+end
+
+-- function waitUntilFull(n)
+--     print ('wUF start')
+--     --count = countItemsInBag(tilePool)
+--     count = count + 1
+--     print('wUF n=', n or 'nil')
+--     --if true then return false end
+--     if count >= n then
+--         print('++', count)
+--         return false
+--     else
+--         print("... ", count )
+--         return true
+--     end
+-- end
+
+function distributeTiles()  -- actually spread them out
+    -- done after we have refilled the tilePool if needed
     local params = {
         smooth = true,
         callback_function = function(obj)  end,
       }
     local offsets={{1.5,1,1.5}, {-1.5,2,1.5}, {1.5,3,-1.5}, {-1.5,4,-1.5}}
+    tilePool.shuffle()
+    tilePool.shuffle()
     for f = 1, #factoryPos do
-        base = factoryPos[f]
+        local base = factoryPos[f]
         for i=1,4 do
             params.position = base + Vector(offsets[i])
             params.rotation = {math.random(25), math.random(90), math.random(15)}
@@ -132,6 +177,9 @@ function onScriptingButtonDown(index, player_color)
     if tostring(index) == '1' then getCenterTiles() end
     -- if tostring(index) == '1' then getCenterObjects(tilePool.getPosition(), 10) end
     if tostring(index) == '2' then getUnplayedTiles() end
+    if tostring(index) == '3' then emptyBag(discards) end
+    if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
+
 end
 
 
