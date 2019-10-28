@@ -1,17 +1,231 @@
 function onLoad()
     print ('Started :-)')
-    white_token = getObjectFromGUID('71bd9b')
+    startToken = getObjectFromGUID('71bd9b')
+    startToken.setName('Start token')
+    gameTable = getObjectFromGUID('52fa59')
+    tilePool = getObjectFromGUID('d101ec')
+    tilePoolDiam = 8.3
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
-    cardx = getObjectFromGUID('8259b9')
+    cardx = getObjectFromGUID('18a461')
+    -- printPosition(cardx.getPosition())
+    -- cardx.setPosition({12,4.53,12})
     card1 = {pos = Vector(-46.45, 8.0, -26.85), rotation = 0, center={-34.4, 4.53, -15}}
     card2 = {pos = Vector(22.32, 8.0, -26.85), rotation = 0, center={34.4, 4.53, -15}}
-    card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={}}
-    card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180}
-    printPosition(cardx.getPosition(), 'cardx')
-    cardx.setPosition({0,4.53,0})
+    card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={34.4, 4.53, 15}}
+    card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180, center={-34.4, 4.53, 15}}
+    factory = getObjectFromGUID('cdf90f')
+    printPosition(startToken.getPosition())
+
+    players = 4
+    placeFactories(players)
+    drawTiles()
+    eraseScriptingZones()
+    createFactoryZones()
+    tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
+            font_color={1,1,1}, position={2,0.3,2}})
 end
 
 function onObjectDrop(_, obj)
-    print('!', obj)
     printPosition(obj.getPosition())
 end
+
+function placeFactories(players)
+    local fHeight = 4.5
+    local count = ({5,5,7,9})[players]
+    local radiusForPlayers = {12,14,14,15}
+    centerRadius = radiusForPlayers[players]
+    factoryPos = Polygon:new({sides=count, radius=centerRadius, center=Vector(0, fHeight, 0)}).points -- global
+    factories = {factory}
+    for i, p in ipairs(factoryPos) do
+        if i == 1 then
+            factory.setPosition(p)
+            f = factory
+        else
+            local f = factory.clone({position=p})
+            f.setPosition(p)
+            table.insert(factories, f)
+        end
+        f.setLock(true)
+        f.setName('Factory ' .. i)
+    end
+end
+
+function drawTiles()
+    if #getUnplayedTiles() > 0 then
+        broadcastToAll('Play all the tiles first', 'Red')
+        return
+    end
+    local params = {
+        smooth = true,
+        callback_function = function(obj)  end,
+      }
+    local offsets={{1.5,1,1.5}, {-1.5,2,1.5}, {1.5,3,-1.5}, {-1.5,4,-1.5}}
+    for f = 1, #factoryPos do
+        base = factoryPos[f]
+        for i=1,4 do
+            params.position = base + Vector(offsets[i])
+            params.rotation = {math.random(25), math.random(90), math.random(15)}
+            tilePool.takeObject(params)
+        end
+    end
+    startToken.setPositionSmooth(Vector(0,0,0))
+end
+
+function createFactoryZones()
+    local params = {
+        type = 'ScriptingTrigger',
+        rotation = Vector(0,0, 0),
+        scale = {x=tilePoolDiam*0.9, y=3, z=tilePoolDiam*0.9},
+        callback_function = function(obj)  end,
+        }
+    local thisZone
+    for i, p in ipairs(factoryPos) do
+        params.position = p
+        thisZone = spawnObject(params)
+        thisZone.setName('Factory Zone' .. i)
+    end
+end
+
+
+function eraseScriptingZones()
+    local allobj = getAllObjects() -- global object
+    for _, o in ipairs(allobj) do
+        if (o.tag == 'Scripting') then o.destruct() end
+    end
+end
+
+function getUnplayedTiles()
+    return getCast(Vector(0,5,0),  32)
+end
+
+function getCenterTiles()
+    return getCast(Vector(0,5,0),  centerRadius * 1.15)
+end
+
+function getCast(pos, radius)
+    print ('radius=', fmt2(radius))
+    params = {
+        origin       = Vector(pos),
+        direction    = {0,1,0},
+        type         = 2,
+        size         = {radius, radius, radius},
+        max_distance = 0,
+        debug        = false,
+    }
+    hitList = Physics.cast(params)
+    local objList = {}
+--    pdump(hitlist)
+    for _,h in ipairs(hitList) do
+        local obj = h.hit_object
+        if obj ~= gameTable and obj.tag == 'Figurine' then
+            print (obj.tag, '-', obj.getName())
+--            obj.highlightOn('Green')
+            table.insert(objList,obj)
+        end
+    end
+    print('Found ', #objList, ' objects.')
+    return objList
+end
+
+function onScriptingButtonDown(index, player_color)
+    print('Pressed button ', index)
+    if tostring(index) == '1' then getCenterTiles() end
+    -- if tostring(index) == '1' then getCenterObjects(tilePool.getPosition(), 10) end
+    if tostring(index) == '2' then getUnplayedTiles() end
+end
+
+
+------======= LOCATIONS ON CARDS =========
+-- Will use coordsys with origin in left lower corner to make everything positive
+-- Lower corner is at (-12, -12) *** relative to card center ***
+-- SO
+-- Lower left corner is (0,0)
+-- lower "Broken tile" row is (1,1.4) to (16, 1.4) with spacing =15/6
+-- lower placement row is (1.0, 5.33) to (10.25, 5.33) with spacing 9.25/4
+-- Top placement row is (x, 14.7), vert spacing is 9.37/4
+-- Tiling matrix is (13.74, 14.7) to (22.77, 5.33) w horz spacing = 9/4
+-- Scoring matrix is (0.75, 23.11) to (23.33, 17.16), horz sp = 1.188, vert sp = 1.49
+
+
+
+
+
+--     -- PLACEMENT ROW ======== —
+--
+--     -- initial tile row 1
+--     { position = {0, 0.0, 0}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     { position = {1.2, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.8, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- initial tile row 2
+--     { position = {1.2, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.8, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- initial tile row 3
+--     { position = {1.2, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.8, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {4.4, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- initial tile row 4
+--     { position = {1.2, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.8, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {4.4, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {6.0, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- initial tile row 5
+--     { position = {1.2, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.8, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {4.4, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {6.0, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {7.6, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--
+--
+--     -- GRID ======== —
+--
+--     -- grid row one
+--     { position = {-1.20, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.77, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-4.34, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-5.91, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-7.48, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- grid row two
+--     { position = {-1.20, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.77, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-4.34, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-5.91, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-7.48, 0.0, -0.3}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- grid row three
+--     { position = {-1.20, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.77, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-4.34, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-5.91, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-7.48, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- grid row four
+--     { position = {-1.20, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.77, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-4.34, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-5.91, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-7.48, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
+--
+--     -- grid row four
+--     { position = {-1.20, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.77, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-4.34, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-5.91, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-7.48, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--
+--
+--     -- BROKEN TILES ======== —
+--
+--     { position = {7.55, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {5.825, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {4.1, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {2.375, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {0.65, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-1.075, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+--     { position = {-2.8, 0.0, 7.35}, rotation = {0,0,0}, rotation_snap = true },
+-- })
