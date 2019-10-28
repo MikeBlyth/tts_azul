@@ -73,6 +73,7 @@ function drawTiles()
         --                function() print ('Error - discards bag has not emptied, try manually') end)
 
         Wait.time(function() distributeTiles() end, 2)
+        broadcastToAll('Shuffling ...', 'Green')
         -- the condition function doesn't work ... something to do with counting while transferring
         -- objects or ??? so we'll just have to use a time delay; might be able to rig up something
         -- with a coroutine, check frame by frame, but ...
@@ -105,12 +106,17 @@ function distributeTiles()  -- actually spread them out
     local offsets={{1.5,1,1.5}, {-1.5,2,1.5}, {1.5,3,-1.5}, {-1.5,4,-1.5}}
     tilePool.shuffle()
     tilePool.shuffle()
+    numberToDistribute = math.min(countItemsInBag(tilePool), #factoryPos*4)
+    distributed = 0
     for f = 1, #factoryPos do
         local base = factoryPos[f]
         for i=1,4 do
-            params.position = base + Vector(offsets[i])
-            params.rotation = {math.random(25), math.random(90), math.random(15)}
-            tilePool.takeObject(params)
+            if distributed < numberToDistribute then
+                params.position = base + Vector(offsets[i])
+                params.rotation = {math.random(25), math.random(90), math.random(15)}
+                tilePool.takeObject(params)
+                distributed = distributed + 1
+            end
         end
     end
     startToken.setPositionSmooth(Vector(0,0,0))
