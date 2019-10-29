@@ -29,10 +29,13 @@ function onLoad()
         createFactoryZones()
     end
     follower = tilePool.takeObject({position={1,1,5}})
+    --print(type(startToken), startToken.getPosition)
+    followGroup_1 = FollowerGroup:new({target=startToken, followers={follower}, spacing=Vector(2.5,0,0)})
 end
 
 function onUpdate()
-    followObj(startToken, follower, Vector(9.24/4,0,0))
+    --followObj(startToken, follower, Vector(9.24/4,0,0))
+    updateAllFollowerGroups()
 end
 
 function followObj(target,follower, gap) -- (obj, obj, vector)
