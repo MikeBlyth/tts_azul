@@ -8,6 +8,8 @@ function onLoad()
     tilePoolDiam = 8.3
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
     cardx = getObjectFromGUID('18a461')
+    zoneEnabled = {}
+    placementRowSpacing = 9.25/4 -- horiz spacing of supply rows
     -- printPosition(cardx.getPosition())
     -- cardx.setPosition({12,4.53,12})
     card1 = {pos = Vector(-46.45, 8.0, -26.85), rotation = 0, center={-34.4, 4.53, -15}}
@@ -20,17 +22,16 @@ function onLoad()
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
     -- get number of players
-    players = 4
+    players = 3
     doSetup = true
     if doSetup then
         placeFactories(players)
         drawTiles()
         eraseScriptingZones()
         createFactoryZones()
+        createCenterZone()
+       createCardScriptingZones()
     end
-    follower = tilePool.takeObject({position={1,1,5}})
-    --print(type(startToken), startToken.getPosition)
-    followGroup_1 = FollowerGroup:new({target=startToken, followers={follower}, spacing=Vector(2.5,0,0)})
 end
 
 function onUpdate()
@@ -45,7 +46,7 @@ end
 
 
 function onObjectDrop(_, obj)
-    --printPosition(obj.getPosition())
+    printPosition(obj.getPosition())
 end
 
 function placeFactories(players)
@@ -118,6 +119,7 @@ function distributeTiles()  -- actually spread them out
         callback_function = function(obj)  end,
       }
     local offsets={{1.5,1,1.5}, {-1.5,2,1.5}, {1.5,3,-1.5}, {-1.5,4,-1.5}}
+    distributing = true -- global, on while distributing to avoid action on entering/leaving scripting zones
     tilePool.shuffle()
     tilePool.shuffle()
     numberToDistribute = math.min(countItemsInBag(tilePool), #factoryPos*4)
@@ -128,15 +130,18 @@ function distributeTiles()  -- actually spread them out
             if distributed < numberToDistribute then
                 params.position = base + Vector(offsets[i])
                 params.rotation = {math.random(25), math.random(90), math.random(15)}
+                params.rotation = Vector(0,0,0)
                 tilePool.takeObject(params)
                 distributed = distributed + 1
             end
         end
     end
     startToken.setPositionSmooth(Vector(0,0,0))
+    Wait.time(function() distributing = false end, 3.0)
 end
 
 function createFactoryZones()
+
     local params = {
         type = 'ScriptingTrigger',
         rotation = Vector(0,0, 0),
@@ -148,9 +153,38 @@ function createFactoryZones()
         params.position = p
         thisZone = spawnObject(params)
         thisZone.setName('Factory Zone' .. i)
+        zoneEnabled[thisZone] = true
     end
 end
 
+function createCenterZone()
+    local positioning={{position = Vector(1,4,0), scale = Vector(15,3,14)},
+                 {position = Vector(0,4,0), scale = Vector(14,3,13)},
+                 {position = Vector(-1,4,0), scale = Vector(15,3,14)} }
+    local params = {
+        type = 'ScriptingTrigger',
+        position = positioning[players-1].position,
+        scale = positioning[players-1].scale,
+        callback_function = function(obj)  end,
+        }
+    pdump(params,'params')
+    local thisZone = spawnObject(params)
+    thisZone.setName('Center Zone')
+    zoneEnabled[thisZone] = true
+end
+
+function createCardScriptingZones()
+    local position = Vector(-6.34, 0, -2)
+    local params = {
+        type = 'ScriptingTrigger',
+        position = cardx.positionToWorld(position),
+        scale = Vector(11.2,3,11.2),
+        callback_function = function(obj)  end,
+        }
+        local thisZone = spawnObject(params)
+        thisZone.setName('Cardx')
+        zoneEnabled[thisZone] = false
+end
 
 function eraseScriptingZones()
     local allobj = getAllObjects() -- global object
@@ -159,6 +193,48 @@ function eraseScriptingZones()
     end
 end
 
+-- WHEN TILES ARE PICKED UP --------------------
+
+function onObjectLeaveScriptingZone(zone, obj)
+    if distributing or not zoneEnabled[zone] then return nil end
+    print('leave')
+    if not isTile(obj) then return end
+    -- line up other tiles of same color
+    print(obj.getName(), ' leaving zone')
+    obj.setRotation(Vector(0,0,0))
+    obj.highlightOn('Red')
+    local color = obj.getName()
+    -- print(#zone.getObjects())
+    local zoneObj = zone.getObjects()
+    -- for _,o in ipairs(zoneObj) do
+    --     print(o.tag, '/', o.getName(), '/', o.getGUID() )
+    -- end
+    local others = filterTable(zone.getObjects(),
+            function(_,o) return o.getName()==color end)
+    pdump(others,'others')
+    for _,o in ipairs(others) do
+        o.setRotation(Vector(0,0,0))
+    end
+    zoneEnabled[zone] = false
+    local fg = FollowerGroup:new({target=obj, followers=others, spacing=Vector(placementRowSpacing, 0, 0)})
+    table.insert(AllFollowerGroups,fg)
+    Wait.time(function() zoneEnabled[zone]=true end, 2.0)
+end
+
+function isTile(obj)
+    local name=obj.getName()
+    print('name=',name, ', tag=', obj.tag or 'nil   ')
+    return obj.tag=='Figurine' and
+        (name=='Red' or name=='Yellow' or name=='Black' or name=='White' or name=='Blue')
+end
+
+function onObjectEnterScriptingZone(zone, obj)
+    if not (zoneEnabled[zone] and isTile(obj)) then return end
+    FollowerGroup.removeFromAllFollowerGroups(obj) -- break FollowerGroup
+    obj.highlightOff()
+    obj.setRotation(Vector(0,0,0))
+end
+----------=========== CHECKING TILES IN THE CENTER ===============
 function getUnplayedTiles()
     return getCast(Vector(0,5,0),  32)
 end
