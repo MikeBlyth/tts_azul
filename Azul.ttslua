@@ -30,7 +30,9 @@ function onLoad()
         eraseScriptingZones()
         createFactoryZones()
         createCenterZone()
-       createCardScriptingZones()
+        createCardScriptingZones()
+        createCardGrids()
+        placeSnaps()
     end
 end
 
@@ -46,7 +48,11 @@ end
 
 
 function onObjectDrop(_, obj)
-    printPosition(obj.getPosition())
+    local p = obj.getPosition()
+    local p2 = cardx.positionToLocal(p)
+    local p3 = cardx.positionToWorld(p2)
+    --printPosition(p, 'world')
+    printPosition(p2, 'local')
 end
 
 function placeFactories(players)
@@ -69,6 +75,36 @@ function placeFactories(players)
         f.setLock(true)
         f.setName('Factory ' .. i)
     end
+end
+
+function createCardGrids()
+    -- coordinates are all local, relative to a card
+    placementGrid=TriangularGrid:new({origin=Vector(1.2,0,-1.87), spacing=Vector(1.6, 0, 1.62), rows=5})
+    patternGrid=Grid:new({origin=Vector(-7.5, 0, -1.87), spacing=Vector(1.58, 0, 1.62), rows=5, cols=5})
+    floorGrid = Grid:new({origin=Vector(-2.8, 0, 7.35), spacing=Vector(1.73, 0, 1.62), rows=1, cols=7})
+    scoringGrid = Grid:new({origin=Vector(-7.8,0,-7.64), spacing=Vector(0.82, 0, 1.0), rows=5, cols=20})
+end
+
+function placeSnaps()  -- do it for each card
+    for _, guid in ipairs(card_guids) do
+        local card = getObjectFromGUID(guid)
+        placeSnapsOnCard(card)
+    end
+end
+
+
+function placeSnapsOnCard(card)  --
+    placeSnapsOnLocalPoints(card, placementGrid:generatePointsFlat())
+    placeSnapsOnLocalPoints(card, patternGrid:generatePointsFlat())
+    placeSnapsOnLocalPoints(card, floorGrid:generatePointsFlat())
+end
+
+function placeSnapsOnLocalPoints(object,points)
+    local sPoints = {}
+    for _,p in ipairs(points) do
+        table.insert(sPoints, {position=p, rotation = {0,0,0}, rotation_snap = true} )
+    end
+    object.setSnapPoints(sPoints)
 end
 
 function drawTiles()
@@ -174,13 +210,18 @@ function createCenterZone()
 end
 
 function createCardScriptingZones()
-    local position = Vector(-6.34, 0, -2)
+    local position = Vector(4.4, 0, 1.33)
+    cxPos = cardx.getPosition()
     local params = {
         type = 'ScriptingTrigger',
         position = cardx.positionToWorld(position),
         scale = Vector(11.2,3,11.2),
         callback_function = function(obj)  end,
         }
+-- printPosition(cxPos, 'cardx Position')
+-- printPosition(position, 'Local Z center')
+-- printPosition(params.position, 'params pos ')
+-- should be (-39.94, x, -16.76)
         local thisZone = spawnObject(params)
         thisZone.setName('Cardx')
         zoneEnabled[thisZone] = false
@@ -223,7 +264,7 @@ end
 
 function isTile(obj)
     local name=obj.getName()
-    print('name=',name, ', tag=', obj.tag or 'nil   ')
+    --print('name=',name, ', tag=', obj.tag or 'nil   ')
     return obj.tag=='Figurine' and
         (name=='Red' or name=='Yellow' or name=='Black' or name=='White' or name=='Blue')
 end
@@ -279,21 +320,33 @@ function onScriptingButtonDown(index, player_color)
 end
 
 
-------======= LOCATIONS ON CARDS =========
--- Will use coordsys with origin in left lower corner to make everything positive
--- Lower corner is at (-12, -12) *** relative to card center ***
--- SO
--- Lower left corner is (0,0)
--- lower "Broken tile" row is (1,1.4) to (16, 1.4) with spacing =15/6
--- lower placement row is (1.0, 5.33) to (10.25, 5.33) with spacing 9.25/4
--- Top placement row is (x, 14.7), vert spacing is 9.37/4
--- Tiling matrix is (13.74, 14.7) to (22.77, 5.33) w horz spacing = 9/4
--- Scoring matrix is (0.75, 23.11) to (23.33, 17.16), horz sp = 1.188, vert sp = 1.49
-
-
-
-
-
+------======= POSITIONING INFORMATION ========
+-- Cardx (lower left card) position (center of card from center of table) is (-34.4, 4.53, -15)
+-- NB: Card coordinate axes are rotated 180 degrees from the normal card orientation.
+--     positive x and y are toward lower left of card
+-- Lower corner is at (-12, -12) in world units *** relative to card center ***
+--          but    at (8.2, 8.2) in card units.
+-- Card scale is 1.45
+-- Card y-axis rotation of lower-left card is 180. Rotation of "top" cards,
+-- those in same row as the supply bag, is 0.
+-- INITIAL PLACEMENT/SUPPLY ROWS
+-- Center of supply rows is leftmost square in 3rd row, local (4.4, 0, 1.33)
+-- Top supply row square is local (1.20, , -1.87)
+-- Lower left row square is local (7.6,, 4.6)
+-- Spacing = {1.6, 0, 1.62}
+-- GRID WHERE TILES ARE FINALLY PLACED AND SCORED
+-- Upper right =  {-7.5, 0.0, -1.87}
+-- Lower left = {-1.18, 0.0, 4.6}
+-- Spacing =  {1.58, 0, 1.62}
+-- FLOOR ROW Where overflow tiles go
+-- {-2.8, 0.0, 7.35} to {7.55, 0.0, 7.35}
+-- Spacing = (1.73,0,0)
+-- SCORING SECTION
+-- The 20 square (upper right) is (-7.8, , -7.64)
+-- The 81 square (lower left) is (7.77, -3.58)
+-- Spacing = (0.82,0, 1.0)
+--
+-- ORIGINAL PROGRAM PLACEMENT OF MAGNETS
 --     -- PLACEMENT ROW ======== —
 --
 --     -- initial tile row 1
@@ -309,7 +362,7 @@ end
 --     -- initial tile row 3
 --     { position = {1.2, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
 --     { position = {2.8, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
---     { position = {4.4, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true },
+--     NB: { position = {4.4, 0.0, 1.33}, rotation = {0,0,0}, rotation_snap = true }, -- this is center of supply area
 --
 --     -- initial tile row 4
 --     { position = {1.2, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
@@ -328,7 +381,7 @@ end
 --     -- GRID ======== —
 --
 --     -- grid row one
---     { position = {-1.20, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
+--     NB: { position = {-1.20, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true }, -- upper right matrix corner
 --     { position = {-2.77, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
 --     { position = {-4.34, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
 --     { position = {-5.91, 0.0, -1.87}, rotation = {0,0,0}, rotation_snap = true },
@@ -356,7 +409,7 @@ end
 --     { position = {-7.48, 0.0, 2.97}, rotation = {0,0,0}, rotation_snap = true },
 --
 --     -- grid row four
---     { position = {-1.20, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
+--     NB: { position = {-1.20, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },  -- lower left
 --     { position = {-2.77, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
 --     { position = {-4.34, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
 --     { position = {-5.91, 0.0, 4.6}, rotation = {0,0,0}, rotation_snap = true },
