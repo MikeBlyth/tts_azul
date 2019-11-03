@@ -6,6 +6,7 @@ function onLoad()
     tilePool = getObjectFromGUID('d101ec')
     discards = getObjectFromGUID('c30f7d')
     tilePoolDiam = 8.3
+    colors = {'Red', 'Yellow', 'White', 'Black', 'Blue', }
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
     cardx = getObjectFromGUID('18a461')
     zoneEnabled = {}
@@ -23,32 +24,44 @@ function onLoad()
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
     -- get number of players
-    players = 3
+refreshSupply()
     doSetup = true
     if doSetup then
-        placeFactories(players)
-        drawTiles()
-        eraseScriptingZones()
-        createFactoryZones()
-        createCenterZone()
-        createCardScriptingZones()
-        createCardGrids()
-        placeSnaps()
+        Wait.condition(finishSetup, function() return playersN ~= nil end)
     end
+end
+
+function finishSetup()
+    assert(playersN>1 and playersN<5)
+    placeFactories(playersN)
+    drawTiles()
+    eraseScriptingZones()
+    createFactoryZones()
+    createCenterZone()
+    createCardScriptingZones()
+    createCardGrids()
+    placeSnaps()
 end
 
 Frame = 0
 function onUpdate()
-    --followObj(startToken, follower, Vector(9.24/4,0,0))
+    --disableRestingFollowerGroups()
     updateAllFollowerGroups()
     Frame = Frame + 1
 end
 
-function followObj(target,follower, gap) -- (obj, obj, vector)
-    follower.setPosition(target.getPosition()+Vector(gap))
-    follower.setRotation(target.getRotation())
+function disableRestingFollowerGroups()
+    for _, fg in ipairs(AllFollowerGroups) do
+        if fg.target.resting then
+            print('Resting')
+        end
+    end
 end
 
+function setPlayerCount(x,n)
+    playersN = tonumber(n)
+    UI.setAttribute('PlayerNum', 'active', false)
+end
 
 function onObjectDrop(_, obj)
     local p = obj.getPosition()
@@ -57,20 +70,20 @@ function onObjectDrop(_, obj)
     --printPosition(p2, 'local')
 end
 
-function placeFactories(players)
+function placeFactories(playersN)
     local fHeight = 4.5
-    local count = ({5,5,7,9})[players]
-    local radiusForPlayers = {12,14,14,15}
-    centerRadius = radiusForPlayers[players]
+    local count = ({5,5,7,9})[playersN]
+    local radiusForplayersN = {12,14,14,15}
+    local centerRadius = radiusForplayersN[playersN]
     factoryPos = Polygon:new({sides=count, radius=centerRadius, center=Vector(0, fHeight, 0)}).points -- global
-    factories = {factory}
+    local factories = {factory}
     for i, p in ipairs(factoryPos) do
         if i == 1 then
-            printPosition(p, 'factoryPos[1]')
+            --printPosition(p, 'factoryPos[1]')
             factory.setPosition(p)
             f = factory
         else
-            local f = factory.clone({position=p})
+            f = factory.clone({position=p})
             f.setPosition(p)
             table.insert(factories, f)
         end
@@ -114,7 +127,7 @@ function drawTiles()
         broadcastToAll('Play all the tiles first', 'Red')
         return
     end
-    requiredTiles = #factoryPos * 4
+    local requiredTiles = #factoryPos * 4
     if countItemsInBag(tilePool) < requiredTiles then
         local totalTiles = countItemsInBag(tilePool) + countItemsInBag(discards)
         transferBags(discards, tilePool, 0.02) -- put the discards into the pool again
@@ -134,6 +147,32 @@ function drawTiles()
         distributeTiles()
     end
 end
+
+function refreshSupply() -- ensure that bag has exactly 20 of each tile
+    assert(countItemsInBag(discards)==0, 'Run at start of game when discards bag is empty.')
+    local tp = tilePool.getObjects()
+    local groups = {}
+    local count
+    for _,color in ipairs(colors) do
+        groups[color] = filterTable(tp, function(k,v) return v.name == color end)
+        count = #groups[color]
+        print(color, '=>',count)
+        if count < 20 then
+            spawnTiles(color, 20-count)
+        else
+            removeTiles(color, count-20)
+        end
+    end
+end
+
+function spawnTiles(color, count)
+    print('spawning ', count, ' ', color, ' tiles.')
+end
+
+function removeTiles(color, count)
+    print('removing ', count, ' ', color, ' tiles.')
+end
+
 
 -- function waitUntilFull(n)
 --     print ('wUF start')
@@ -160,8 +199,8 @@ function distributeTiles()  -- actually spread them out
     distributing = true -- global, on while distributing to avoid action on entering/leaving scripting zones
     tilePool.shuffle()
     tilePool.shuffle()
-    numberToDistribute = math.min(countItemsInBag(tilePool), #factoryPos*4)
-    distributed = 0
+    local numberToDistribute = math.min(countItemsInBag(tilePool), #factoryPos*4)
+    local distributed = 0
     for f = 1, #factoryPos do
         local base = factoryPos[f]
         for i=1,4 do
@@ -179,7 +218,6 @@ function distributeTiles()  -- actually spread them out
 end
 
 function createFactoryZones()
-
     local params = {
         type = 'ScriptingTrigger',
         rotation = Vector(0,0, 0),
@@ -202,11 +240,11 @@ function createCenterZone()
                  {position = Vector(-1,4,0), scale = Vector(15,3,14)} }
     local params = {
         type = 'ScriptingTrigger',
-        position = positioning[players-1].position,
-        scale = positioning[players-1].scale,
+        position = positioning[playersN-1].position,
+        scale = positioning[playersN-1].scale,
         callback_function = function(obj)  end,
         }
-    pdump(params,'params')
+    --pdump(params,'params')
     local thisZone = spawnObject(params)
     thisZone.setName('Center Zone')
     zoneEnabled[thisZone] = true
@@ -215,16 +253,19 @@ end
 
 function createCardScriptingZones()
     local position = Vector(4.4, 0, 1.33)
-    cxPos = cardx.getPosition()
+    cxPos = cardx.getPosition()  -- global for debugging/testing
     local params = {
         type = 'ScriptingTrigger',
         position = cardx.positionToWorld(position),
         scale = Vector(11.2,3,11.2),
         callback_function = function(obj)  end,
         }
+    for i, cardGUID in ipairs(card_guids) do
+        params.position = getObjectFromGUID(cardGUID).positionToWorld(position)
         local thisZone = spawnObject(params)
-        thisZone.setName('Cardx')
+        thisZone.setName('Card ' .. i)
         zoneEnabled[thisZone] = false
+    end
 end
 
 function eraseScriptingZones()
@@ -237,11 +278,11 @@ end
 -- WHEN TILES ARE PICKED UP --------------------
 
 function onObjectLeaveScriptingZone(zone, obj)
+    -- the whole purpose of this is to pull all tiles of the same color into a FollowerGroup
     if distributing or not zoneEnabled[zone] or not followerZones[zone] then return nil end
-    print('leave')
     if not isTile(obj) then return end
     -- line up other tiles of same color
-    print(obj.getName(), ' leaving zone')
+    --print(obj.getName(), ' leaving zone')
     obj.setRotation(Vector(0,0,0))
     obj.highlightOn('Red')
     local color = obj.getName()
@@ -252,15 +293,15 @@ function onObjectLeaveScriptingZone(zone, obj)
     -- end
     local others = filterTable(zone.getObjects(),
             function(_,o) return o.getName()==color end)
-    pdump(others,'others')
+    --pdump(others,'others')
     for _,o in ipairs(others) do
         o.setRotation(Vector(0,0,0))
     end
     zoneEnabled[zone] = false
     local fg = FollowerGroup:new({target=obj, followers=others, spacing=Vector(placementRowSpacing, 0, 0)})
     --table.insert(AllFollowerGroups,fg)
-    print('onLeaving, just added, afg=', afg, '--------')
-    Wait.time(function() zoneEnabled[zone]=true end, 2.0)
+    --print('onLeaving, just added, afg=', afg, '--------')
+    Wait.time(function() zoneEnabled[zone]=true end, 1.0)  -- so followers don't trigger same thing
 end
 
 function isTile(obj)
@@ -273,16 +314,8 @@ end
 function onObjectEnterScriptingZone(zone, obj)
     if not ( isTile(obj)) then return end
     local afg = AllFollowerGroups
-    print('obj ', obj.getGUID(), '-', obj.getName(), ' entering ', zone.getName())
-    for k,v in pairs(afg.objects) do
-        print(k.getGUID(),'-', v)
-        j = getObjectFromGUID(k)
-        assert(j==k, 'objects not equal')
-        assert(afg.objects.k == afg.objects.j)
-        if v == 't' then print('>>', afg.objects.k or 'nil') end
-    end
-    if AllFollowerGroups.objects.obj == 't' then  -- this is a target/leader of a follower group
-        print('remov')
+    --print('obj ', obj.getGUID(), '-', obj.getName(), ' entering ', zone.getName())
+    if AllFollowerGroups.objects[obj] == 't' then  -- this is a target/leader of a follower group
         FollowerGroup.removeFromAllFollowerGroups(obj) -- break FollowerGroup
     end
     obj.highlightOff()
@@ -293,12 +326,8 @@ function getUnplayedTiles()
     return getCast(Vector(0,5,0),  32)
 end
 
-function getCenterTiles()
-    return getCast(Vector(0,5,0),  centerRadius * 1.15)
-end
-
 function getCast(pos, radius)
-    print ('radius=', fmt2(radius))
+    --print ('radius=', fmt2(radius))
     params = {
         origin       = Vector(pos),
         direction    = {0,1,0},
@@ -313,23 +342,22 @@ function getCast(pos, radius)
     for _,h in ipairs(hitList) do
         local obj = h.hit_object
         if obj ~= gameTable and obj.tag == 'Figurine' then
-            print (obj.tag, '-', obj.getName())
+            --print (obj.tag, '-', obj.getName())
 --            obj.highlightOn('Green')
             table.insert(objList,obj)
         end
     end
-    print('Found ', #objList, ' objects.')
+    --print('Found ', #objList, ' objects.')
     return objList
 end
 
-function onScriptingButtonDown(index, player_color)
-    print('Pressed button ', index)
-    if tostring(index) == '1' then getCenterTiles() end
-    -- if tostring(index) == '1' then getCenterObjects(tilePool.getPosition(), 10) end
-    if tostring(index) == '2' then getUnplayedTiles() end
-    if tostring(index) == '3' then emptyBag(discards) end
-    if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
-
+function onScriptingButtonDown(index, player_color)  -- testing
+    -- print('Pressed button ', index)
+    -- if tostring(index) == '1' then getCenterTiles() end
+    -- -- if tostring(index) == '1' then getCenterObjects(tilePool.getPosition(), 10) end
+    -- if tostring(index) == '2' then getUnplayedTiles() end
+    -- if tostring(index) == '3' then emptyBag(discards) end
+    -- if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
 end
 
 
