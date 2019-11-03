@@ -9,6 +9,7 @@ function onLoad()
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
     cardx = getObjectFromGUID('18a461')
     zoneEnabled = {}
+    followerZones = {}  -- tiles leaving these zones will take same-color tiles with them
     placementRowSpacing = 9.25/4 -- horiz spacing of supply rows
     -- printPosition(cardx.getPosition())
     -- cardx.setPosition({12,4.53,12})
@@ -36,9 +37,11 @@ function onLoad()
     end
 end
 
+Frame = 0
 function onUpdate()
     --followObj(startToken, follower, Vector(9.24/4,0,0))
     updateAllFollowerGroups()
+    Frame = Frame + 1
 end
 
 function followObj(target,follower, gap) -- (obj, obj, vector)
@@ -50,9 +53,8 @@ end
 function onObjectDrop(_, obj)
     local p = obj.getPosition()
     local p2 = cardx.positionToLocal(p)
-    local p3 = cardx.positionToWorld(p2)
     --printPosition(p, 'world')
-    printPosition(p2, 'local')
+    --printPosition(p2, 'local')
 end
 
 function placeFactories(players)
@@ -102,7 +104,7 @@ end
 function placeSnapsOnLocalPoints(object,points)
     local sPoints = {}
     for _,p in ipairs(points) do
-        table.insert(sPoints, {position=p, rotation = {0,0,0}, rotation_snap = true} )
+        table.insert(sPoints, {position=p, rotation = {0,0,0}, rotation_snap = false} )
     end
     object.setSnapPoints(sPoints)
 end
@@ -190,6 +192,7 @@ function createFactoryZones()
         thisZone = spawnObject(params)
         thisZone.setName('Factory Zone' .. i)
         zoneEnabled[thisZone] = true
+        followerZones[thisZone] = true
     end
 end
 
@@ -207,6 +210,7 @@ function createCenterZone()
     local thisZone = spawnObject(params)
     thisZone.setName('Center Zone')
     zoneEnabled[thisZone] = true
+    followerZones[thisZone] = true
 end
 
 function createCardScriptingZones()
@@ -218,10 +222,6 @@ function createCardScriptingZones()
         scale = Vector(11.2,3,11.2),
         callback_function = function(obj)  end,
         }
--- printPosition(cxPos, 'cardx Position')
--- printPosition(position, 'Local Z center')
--- printPosition(params.position, 'params pos ')
--- should be (-39.94, x, -16.76)
         local thisZone = spawnObject(params)
         thisZone.setName('Cardx')
         zoneEnabled[thisZone] = false
@@ -237,7 +237,7 @@ end
 -- WHEN TILES ARE PICKED UP --------------------
 
 function onObjectLeaveScriptingZone(zone, obj)
-    if distributing or not zoneEnabled[zone] then return nil end
+    if distributing or not zoneEnabled[zone] or not followerZones[zone] then return nil end
     print('leave')
     if not isTile(obj) then return end
     -- line up other tiles of same color
@@ -258,7 +258,8 @@ function onObjectLeaveScriptingZone(zone, obj)
     end
     zoneEnabled[zone] = false
     local fg = FollowerGroup:new({target=obj, followers=others, spacing=Vector(placementRowSpacing, 0, 0)})
-    table.insert(AllFollowerGroups,fg)
+    --table.insert(AllFollowerGroups,fg)
+    print('onLeaving, just added, afg=', afg, '--------')
     Wait.time(function() zoneEnabled[zone]=true end, 2.0)
 end
 
@@ -270,8 +271,20 @@ function isTile(obj)
 end
 
 function onObjectEnterScriptingZone(zone, obj)
-    if not (zoneEnabled[zone] and isTile(obj)) then return end
-    FollowerGroup.removeFromAllFollowerGroups(obj) -- break FollowerGroup
+    if not ( isTile(obj)) then return end
+    local afg = AllFollowerGroups
+    print('obj ', obj.getGUID(), '-', obj.getName(), ' entering ', zone.getName())
+    for k,v in pairs(afg.objects) do
+        print(k.getGUID(),'-', v)
+        j = getObjectFromGUID(k)
+        assert(j==k, 'objects not equal')
+        assert(afg.objects.k == afg.objects.j)
+        if v == 't' then print('>>', afg.objects.k or 'nil') end
+    end
+    if AllFollowerGroups.objects.obj == 't' then  -- this is a target/leader of a follower group
+        print('remov')
+        FollowerGroup.removeFromAllFollowerGroups(obj) -- break FollowerGroup
+    end
     obj.highlightOff()
     obj.setRotation(Vector(0,0,0))
 end
