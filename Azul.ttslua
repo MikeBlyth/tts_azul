@@ -1,6 +1,6 @@
 function onLoad()
     print ('Started :-)')
-    startToken = getObjectFromGUID('71bd9b')
+    startToken = getObjectFromGUID('4ca9fe') or spawnStartToken()
     if startToken then startToken.setName('Start token') end
     gameTable = getObjectFromGUID('52fa59')
     tilePool = getObjectFromGUID('d101ec')
@@ -19,13 +19,13 @@ function onLoad()
     card2 = {pos = Vector(22.32, 8.0, -26.85), rotation = 0, center={34.4, 4.53, -15}}
     card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={34.4, 4.53, 15}}
     card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180, center={-34.4, 4.53, 15}}
-    factory = getObjectFromGUID('8d86bf')
+    factory = getObjectFromGUID('8d86bf') or spawnFactory()
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
     -- get number of players
     refreshSupply()
     removeExtraFactories()
-    doSetup = false
+    doSetup = true
     if doSetup then
         UI.setAttribute('PlayerNum', 'active', true)
         Wait.condition(finishSetup, function() return playersN ~= nil end)
@@ -58,6 +58,37 @@ function disableRestingFollowerGroups()
         end
     end
 end
+
+function spawnStartToken()
+    local params={
+     type='Custom_Model',
+     position=Vector(-12,7, 22),
+     rotation={0,180,0},
+     scale={1,1,1},
+     callback_function = function(obj) end,
+    }
+    obj = spawnObject(params)
+    pdump(objectSpawnParams.startToken)
+    obj.setCustomObject(objectSpawnParams.startToken)
+    obj.setName('Start token')
+    return obj
+end
+
+function spawnFactory()
+    local params={
+     type='Custom_Model',
+     position=Vector(-15,7, 15),
+     rotation={0,0,0},
+     scale={1,1,1},
+     callback_function = function(obj) end,
+    }
+    obj = spawnObject(params)
+    --pdump(objectSpawnParams.startToken)
+    obj.setCustomObject(objectSpawnParams.factory)
+    obj.setName('Factory 1')
+    return obj
+end
+
 
 function setPlayerCount(x,n)
     playersN = tonumber(n)
@@ -179,37 +210,9 @@ function refreshSupply() -- ensure that bag has exactly 20 of each tile
     end
 end
 
-tileSpawnParams = {
-Black = {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
-        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419273056/A03D249CF12867EB4134A9A7E9A9D2A1632EE704/',
-        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
-        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
-    },
-Yellow =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
-        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347416754435/BA4334969D1AD4E8B146AE7E7A1A430F14C7A5DA/',
-        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
-        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
-    },
-White =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
-        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272946/C8F005A109AAD820E38A8E377F1026074B830401/',
-        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
-        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
-    },
 
-Red =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
-        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272641/EE644ECD0ADC6C78AC61E0C538BAF98FD8703908/',
-        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
-        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
-    },
-
-Blue =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
-        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272833/D4C93372171EBA7604524C0E6B6DA29347B5209A/',
-        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
-        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
-    }
-}
 function spawnTiles(color, count)
-    print('spawning ', count, ' ', color, ' tiles.')
+    --print('spawning ', count, ' ', color, ' tiles.')
     local params={
      type='Custom_Model',
      position=Vector(17,7,-22),
@@ -219,7 +222,7 @@ function spawnTiles(color, count)
     }
     for i=1,count do
         obj = spawnObject(params)
-        obj.setCustomObject(tileSpawnParams[color])
+        obj.setCustomObject(objectSpawnParams[color])
         obj.setName(color)
         -- Wait.time(function() tilePool.putObject(obj); print('Sent'); end, 0.2)
     end
@@ -280,6 +283,7 @@ function distributeTiles()  -- actually spread them out
             end
         end
     end
+    printPosition(startToken.getPosition(), 'startToken')
     startToken.setPositionSmooth(Vector(0,0,0))
     Wait.time(function() distributing = false end, 3.0)
 end
@@ -422,7 +426,7 @@ function onScriptingButtonDown(index, player_color)  -- testing
     print('Pressed button ', index)
      if tostring(index) == '1' then removeExtraFactories() end
      if tostring(index) == '2' then refreshSupply() end
-    -- if tostring(index) == '3' then emptyBag(discards) end
+    if tostring(index) == '3' then spawnFactory() end
     -- if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
 end
 
