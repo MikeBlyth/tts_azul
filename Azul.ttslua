@@ -1,12 +1,13 @@
 function onLoad()
     print ('Started :-)')
     startToken = getObjectFromGUID('71bd9b')
-    startToken.setName('Start token')
+    if startToken then startToken.setName('Start token') end
     gameTable = getObjectFromGUID('52fa59')
     tilePool = getObjectFromGUID('d101ec')
     discards = getObjectFromGUID('c30f7d')
     tilePoolDiam = 8.3
-    colors = {'Red', 'Yellow', 'White', 'Black', 'Blue', }
+    colors = {'Red', 'Yellow', 'White', 'Black', 'Blue',
+            Red=true, Yellow=true, White=true, Black=true, Blue=true }
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
     cardx = getObjectFromGUID('18a461')
     zoneEnabled = {}
@@ -19,14 +20,14 @@ function onLoad()
     card3 = {pos = Vector(46.45, 8.0, 26.88), rotation = 180, center={34.4, 4.53, 15}}
     card4 = {pos = Vector(-22.4, 8.0, 26.88), rotation = 180, center={-34.4, 4.53, 15}}
     factory = getObjectFromGUID('8d86bf')
-    print(factory)
-    printPosition(startToken.getPosition())
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
     -- get number of players
-refreshSupply()
-    doSetup = true
+    refreshSupply()
+    removeExtraFactories()
+    doSetup = false
     if doSetup then
+        UI.setAttribute('PlayerNum', 'active', true)
         Wait.condition(finishSetup, function() return playersN ~= nil end)
     end
 end
@@ -66,7 +67,7 @@ end
 function onObjectDrop(_, obj)
     local p = obj.getPosition()
     local p2 = cardx.positionToLocal(p)
-    --printPosition(p, 'world')
+    printPosition(p, 'world')
     --printPosition(p2, 'local')
 end
 
@@ -148,6 +149,14 @@ function drawTiles()
     end
 end
 
+function removeExtraFactories()
+    local all = filterTable(getAllObjects(), function(k,v) return v.tag=='Chip' end)
+    print('there are ', #all, ' factories')
+    for _, f in ipairs(all) do
+        if f ~= factory then f.destruct() end
+    end
+end
+
 function refreshSupply() -- ensure that bag has exactly 20 of each tile
     assert(countItemsInBag(discards)==0, 'Run at start of game when discards bag is empty.')
     local tp = tilePool.getObjects()
@@ -160,17 +169,75 @@ function refreshSupply() -- ensure that bag has exactly 20 of each tile
         if count < 20 then
             spawnTiles(color, 20-count)
         else
-            removeTiles(color, count-20)
+            removeTiles(color, count-20, groups)
         end
+    end
+    local extraStuff = filterTable(tp, function(k,v) return not colors[v.name]  end)  -- get stuff that isn't a tile
+    for i, stuff in ipairs(extraStuff) do
+        print ('taking ', i, '=', stuff.guid)
+        tilePool.takeObject({guid=stuff.guid, position=Vector(-20+4*i, 10, 0)})
     end
 end
 
+tileSpawnParams = {
+Black = {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
+        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419273056/A03D249CF12867EB4134A9A7E9A9D2A1632EE704/',
+        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
+        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
+    },
+Yellow =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
+        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347416754435/BA4334969D1AD4E8B146AE7E7A1A430F14C7A5DA/',
+        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
+        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
+    },
+White =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
+        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272946/C8F005A109AAD820E38A8E377F1026074B830401/',
+        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
+        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
+    },
+
+Red =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
+        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272641/EE644ECD0ADC6C78AC61E0C538BAF98FD8703908/',
+        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
+        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
+    },
+
+Blue =   {mesh = 'http://cloud-3.steamusercontent.com/ugc/967597347419272565/8326F0A89AEAEE089C4059C5BE828F0B551B3638/',
+        diffuse = 'http://cloud-3.steamusercontent.com/ugc/967597347419272833/D4C93372171EBA7604524C0E6B6DA29347B5209A/',
+        collider = 'http://cloud-3.steamusercontent.com/ugc/967597347419272763/6C18A0AD09F4080D1AF5C84E41AA8F8E1373F6C0/',
+        spectral_intensity = 0.5, specular_sharpness = 7, fresnel_strength = 0.4, type=1, material=0,
+    }
+}
 function spawnTiles(color, count)
     print('spawning ', count, ' ', color, ' tiles.')
+    local params={
+     type='Custom_Model',
+     position=Vector(17,7,-22),
+     rotation={0,0,0},
+     scale={1,1,1},
+     callback_function = function(obj) tilePool.putObject(obj) end,
+    }
+    for i=1,count do
+        obj = spawnObject(params)
+        obj.setCustomObject(tileSpawnParams[color])
+        obj.setName(color)
+        -- Wait.time(function() tilePool.putObject(obj); print('Sent'); end, 0.2)
+    end
 end
 
-function removeTiles(color, count)
+function removeTiles(color, count, objList)
+    if count < 1 then return end
     print('removing ', count, ' ', color, ' tiles.')
+    local params = {
+        smooth = false,
+        callback_function = function(obj) obj.destroy()  end,
+      }
+    local objs = objList[color]
+    for i=1, count do
+        params.position = (Vector(-25+2.2*i, -7, -20))
+        params.guid = objs[i].guid
+        tilePool.takeObject(params)
+    end
 end
 
 
@@ -352,10 +419,9 @@ function getCast(pos, radius)
 end
 
 function onScriptingButtonDown(index, player_color)  -- testing
-    -- print('Pressed button ', index)
-    -- if tostring(index) == '1' then getCenterTiles() end
-    -- -- if tostring(index) == '1' then getCenterObjects(tilePool.getPosition(), 10) end
-    -- if tostring(index) == '2' then getUnplayedTiles() end
+    print('Pressed button ', index)
+     if tostring(index) == '1' then removeExtraFactories() end
+     if tostring(index) == '2' then refreshSupply() end
     -- if tostring(index) == '3' then emptyBag(discards) end
     -- if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
 end
