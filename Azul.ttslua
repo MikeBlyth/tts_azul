@@ -42,6 +42,7 @@ function finishSetup()
     createCardScriptingZones()
     createCardGrids()
     placeSnaps()
+    startToken.setPositionSmooth(Vector(0,0,0)) -- white tile to center, only on setup
 end
 
 Frame = 0
@@ -96,9 +97,9 @@ function setPlayerCount(x,n)
 end
 
 function onObjectDrop(_, obj)
-    local p = obj.getPosition()
-    local p2 = cardx.positionToLocal(p)
-    printPosition(p, 'world')
+    --local p = obj.getPosition()
+    --local p2 = cardx.positionToLocal(p)
+    --printPosition(p, 'world')
     --printPosition(p2, 'local')
 end
 
@@ -159,6 +160,7 @@ function drawTiles()
         broadcastToAll('Play all the tiles first', 'Red')
         return
     end
+    AllFollowerGroups.empty()  -- clear it out as none apply now and they can cause trouble
     local requiredTiles = #factoryPos * 4
     if countItemsInBag(tilePool) < requiredTiles then
         local totalTiles = countItemsInBag(tilePool) + countItemsInBag(discards)
@@ -284,7 +286,6 @@ function distributeTiles()  -- actually spread them out
         end
     end
     printPosition(startToken.getPosition(), 'startToken')
-    startToken.setPositionSmooth(Vector(0,0,0))
     Wait.time(function() distributing = false end, 3.0)
 end
 
@@ -323,18 +324,26 @@ function createCenterZone()
 end
 
 function createCardScriptingZones()
-    local position = Vector(4.4, 0, 1.33)
+    local zonePosition = Vector(4.4, 0, 1.33)
     cxPos = cardx.getPosition()  -- global for debugging/testing
     local params = {
         type = 'ScriptingTrigger',
-        position = cardx.positionToWorld(position),
+        position = cardx.positionToWorld(zonePosition),
         scale = Vector(11.2,3,11.2),
         callback_function = function(obj)  end,
         }
     for i, cardGUID in ipairs(card_guids) do
-        params.position = getObjectFromGUID(cardGUID).positionToWorld(position)
+        params.position = getObjectFromGUID(cardGUID).positionToWorld(zonePosition)
         local thisZone = spawnObject(params)
         thisZone.setName('Card ' .. i)
+        zoneEnabled[thisZone] = false
+    end
+    zonePosition = Vector(2.35, 0, 7.35)
+    params.scale = Vector(16, 3, 2)
+    for i, cardGUID in ipairs(card_guids) do
+        params.position = getObjectFromGUID(cardGUID).positionToWorld(zonePosition)
+        local thisZone = spawnObject(params)
+        thisZone.setName('Floor ' .. i)
         zoneEnabled[thisZone] = false
     end
 end
@@ -362,17 +371,17 @@ function onObjectLeaveScriptingZone(zone, obj)
     -- for _,o in ipairs(zoneObj) do
     --     print(o.tag, '/', o.getName(), '/', o.getGUID() )
     -- end
-    local others = filterTable(zone.getObjects(),
+    local others = filterTable(zone.getObjects(),  -- get all other tiles with same name (color)
             function(_,o) return o.getName()==color end)
     --pdump(others,'others')
     for _,o in ipairs(others) do
         o.setRotation(Vector(0,0,0))
     end
-    zoneEnabled[zone] = false
+    zoneEnabled[zone] = false  -- allows the followers to exit peacefully :-)
     local fg = FollowerGroup:new({target=obj, followers=others, spacing=Vector(placementRowSpacing, 0, 0)})
     --table.insert(AllFollowerGroups,fg)
     --print('onLeaving, just added, afg=', afg, '--------')
-    Wait.time(function() zoneEnabled[zone]=true end, 1.0)  -- so followers don't trigger same thing
+    Wait.time(function() zoneEnabled[zone]=true end, 1.0)  -- until after followers are gone
 end
 
 function isTile(obj)
@@ -386,11 +395,19 @@ function onObjectEnterScriptingZone(zone, obj)
     if not ( isTile(obj)) then return end
     local afg = AllFollowerGroups
     --print('obj ', obj.getGUID(), '-', obj.getName(), ' entering ', zone.getName())
-    if AllFollowerGroups.objects[obj] == 't' then  -- this is a target/leader of a follower group
-        FollowerGroup.removeFromAllFollowerGroups(obj) -- break FollowerGroup
+    local guid = obj.getGUID()
+    if AllFollowerGroups.objects[guid] == 't' then  -- this is a target/leader of a follower group
+        FollowerGroup.removeFromAllFollowerGroups(guid) -- break FollowerGroup
     end
     obj.highlightOff()
     obj.setRotation(Vector(0,0,0))
+end
+
+function onObjectEnterContainer(container, obj)
+    local guid = obj.getGUID()
+    if AllFollowerGroups.objects[guid] == 't' then  -- this is a target/leader of a follower group
+        FollowerGroup.removeFromAllFollowerGroups(guid) -- break FollowerGroup
+    end
 end
 ----------=========== CHECKING TILES IN THE CENTER ===============
 function getUnplayedTiles()
@@ -450,7 +467,7 @@ end
 -- Lower left = {-1.18, 0.0, 4.6}
 -- Spacing =  {1.58, 0, 1.62}
 -- FLOOR ROW Where overflow tiles go
--- {-2.8, 0.0, 7.35} to {7.55, 0.0, 7.35}
+-- {-2.8, 0.0, 7.35} to {7.55, 0.0, 7.35} -- (right to left; left square is 7.55,,7.35)
 -- Spacing = (1.73,0,0)
 -- SCORING SECTION
 -- The 20 square (upper right) is (-7.8, , -7.64)
