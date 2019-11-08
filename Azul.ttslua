@@ -422,8 +422,14 @@ end
 
 function onObjectEnterContainer(container, obj)
     local guid = obj.getGUID()
+    --print(guid, ' entered ', container.getGUID())
     if AllFollowerGroups.objects[guid] == 't' then  -- this is a target/leader of a follower group
         FollowerGroup.removeFromAllFollowerGroups(guid) -- break FollowerGroup
+    end
+    --print(obj == startToken)
+    if (obj.getDescription() == 'Scoring Cube') or (obj.getDescription() == 'Start token') then
+        local retrieved = container.takeObject({position=Vector(0,7,0), guid=guid})
+        if retrieved.getDescription() == 'Start token' then startToken = retrieved end
     end
 end
 ----------=========== CHECKING TILES IN THE CENTER ===============
