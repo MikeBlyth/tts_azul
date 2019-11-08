@@ -4,12 +4,12 @@ function onLoad()
     if startToken then startToken.setName('Start token') end
     gameTable = getObjectFromGUID('52fa59')
     tilePool = getObjectFromGUID('d101ec')
-    discards = getObjectFromGUID('c30f7d')
+    --discards = getObjectFromGUID('c30f7d')
     tilePoolDiam = 8.3
     colors = {'Red', 'Yellow', 'White', 'Black', 'Blue',
             Red=true, Yellow=true, White=true, Black=true, Blue=true }
     card_guids = {'18a461', '9f42ee', '8259b9', '4b40cd'}
-    cardx = getObjectFromGUID('18a461')
+    cardx = getObjectFromGUID('18a461')  -- for testing
     zoneEnabled = {}
     followerZones = {}  -- tiles leaving these zones will take same-color tiles with them
     placementRowSpacing = 9.25/4 -- horiz spacing of supply rows
@@ -23,9 +23,10 @@ function onLoad()
     tilePool.createButton({label='Distribute', click_function='drawTiles', height=1000, width=1500, font_size=250, color='Green',
             font_color={1,1,1}, position={2,0.3,2}})
     -- get number of players
+    discardBags = getDiscardBags()  -- array of all the discard bags
     refreshSupply()
     removeExtraFactories()
-    doSetup = true
+    doSetup = true   -- for development; if set to false, setup does not include the stuff in finishSetup()
     if doSetup then
         UI.setAttribute('PlayerNum', 'active', true)
         Wait.condition(finishSetup, function() return playersN ~= nil end)
@@ -45,20 +46,20 @@ function finishSetup()
     startToken.setPositionSmooth(Vector(0,0,0)) -- white tile to center, only on setup
 end
 
-Frame = 0
+Frame = 0 -- testing
 function onUpdate()
     --disableRestingFollowerGroups()
-    updateAllFollowerGroups()
+    updateAllFollowerGroups()  -- Just delete this to disable the auto-grouping of same-colored tiles
     Frame = Frame + 1
 end
 
-function disableRestingFollowerGroups()
-    for _, fg in ipairs(AllFollowerGroups) do
-        if fg.target.resting then
-            print('Resting')
-        end
-    end
-end
+-- function disableRestingFollowerGroups() -- not used, just an idea
+--     for _, fg in ipairs(AllFollowerGroups) do
+--         if fg.target.resting then
+--             print('Resting')
+--         end
+--     end
+-- end
 
 function spawnStartToken()
     local params={
@@ -68,7 +69,7 @@ function spawnStartToken()
      scale={1,1,1},
      callback_function = function(obj) end,
     }
-    obj = spawnObject(params)
+    local obj = spawnObject(params)
     pdump(objectSpawnParams.startToken)
     obj.setCustomObject(objectSpawnParams.startToken)
     obj.setName('Start token')
@@ -83,7 +84,7 @@ function spawnFactory()
      scale={1,1,1},
      callback_function = function(obj) end,
     }
-    obj = spawnObject(params)
+    local obj = spawnObject(params)
     --pdump(objectSpawnParams.startToken)
     obj.setCustomObject(objectSpawnParams.factory)
     obj.setName('Factory 1')
@@ -92,11 +93,11 @@ end
 
 
 function setPlayerCount(x,n)
-    playersN = tonumber(n)
+    playersN = tonumber(n) -- A global
     UI.setAttribute('PlayerNum', 'active', false)
 end
 
-function onObjectDrop(_, obj)
+function onObjectDrop(_, obj) -- used for getting positions
     --local p = obj.getPosition()
     --local p2 = cardx.positionToLocal(p)
     --printPosition(p, 'world')
@@ -108,6 +109,7 @@ function placeFactories(playersN)
     local count = ({5,5,7,9})[playersN]
     local radiusForplayersN = {12,14,14,15}
     local centerRadius = radiusForplayersN[playersN]
+    local f -- factory used in the loop
     factoryPos = Polygon:new({sides=count, radius=centerRadius, center=Vector(0, fHeight, 0)}).points -- global
     local factories = {factory}
     for i, p in ipairs(factoryPos) do
@@ -125,7 +127,7 @@ function placeFactories(playersN)
     end
 end
 
-function createCardGrids()
+function createCardGrids() -- grids for placing the snaps
     -- coordinates are all local, relative to a card
     placementGrid=TriangularGrid:new({origin=Vector(1.2,0,-1.87), spacing=Vector(1.6, 0, 1.62), rows=5})
     patternGrid=Grid:new({origin=Vector(-7.5, 0, -1.87), spacing=Vector(1.58, 0, 1.62), rows=5, cols=5})
@@ -141,18 +143,30 @@ function placeSnaps()  -- do it for each card
 end
 
 
-function placeSnapsOnCard(card)  --
+function placeSnapsOnCard(card)  -- doing it on one card
     placeSnapsOnLocalPoints(card, placementGrid:generatePointsFlat())
     placeSnapsOnLocalPoints(card, patternGrid:generatePointsFlat())
     placeSnapsOnLocalPoints(card, floorGrid:generatePointsFlat())
 end
 
-function placeSnapsOnLocalPoints(object,points)
+function placeSnapsOnLocalPoints(object,points)  -- place snaps on any list of points
     local sPoints = {}
     for _,p in ipairs(points) do
         table.insert(sPoints, {position=p, rotation = {0,0,0}, rotation_snap = false} )
     end
     object.setSnapPoints(sPoints)
+end
+
+function getDiscardBags()
+    return filterTable(getAllObjects(), function(k, v) return string.sub(v.getName(),1,7)=='Discard' end)
+end
+
+function countTilesInDiscards()
+    local count = 0
+    for _,b in ipairs(discardBags) do
+        count = count + countItemsInBag(b)
+    end
+    return count
 end
 
 function drawTiles()
@@ -163,15 +177,16 @@ function drawTiles()
     AllFollowerGroups.empty()  -- clear it out as none apply now and they can cause trouble
     local requiredTiles = #factoryPos * 4
     if countItemsInBag(tilePool) < requiredTiles then
-        local totalTiles = countItemsInBag(tilePool) + countItemsInBag(discards)
-        transferBags(discards, tilePool, 0.02) -- put the discards into the pool again
-        print('Waiting')
-        -- Wait.condition(function() distributeTiles() end,
-        --                --function() return waitUntilFull(totalTiles) end,
-        --                function() return (waitUntilFull(totalTiles)) end,
-        --                2,
-        --                function() print ('Error - discards bag has not emptied, try manually') end)
-
+        local totalTiles = countItemsInBag(tilePool) + countTilesInDiscards()
+        for _, bag in ipairs(discardBags) do
+            transferBags(bag, tilePool, 0.02) -- put the discards into the pool again
+            --print('Waiting')
+            -- Wait.condition(function() distributeTiles() end,
+            --                --function() return waitUntilFull(totalTiles) end,
+            --                function() return (waitUntilFull(totalTiles)) end,
+            --                2,
+            --                function() print ('Error - discards bag has not emptied, try manually') end)
+        end
         Wait.time(function() distributeTiles() end, 2)
         broadcastToAll('Shuffling ...', 'Green')
         -- the condition function doesn't work ... something to do with counting while transferring
@@ -184,21 +199,22 @@ end
 
 function removeExtraFactories()
     local all = filterTable(getAllObjects(), function(k,v) return v.tag=='Chip' end)
-    print('there are ', #all, ' factories')
+    --print('there are ', #all, ' factories')
     for _, f in ipairs(all) do
         if f ~= factory then f.destruct() end
     end
 end
 
 function refreshSupply() -- ensure that bag has exactly 20 of each tile
-    assert(countItemsInBag(discards)==0, 'Run at start of game when discards bag is empty.')
+    assert(countTilesInDiscards()==0, 'Run at start of game when discards bag is empty.')
+        -- will cause problems if game saved and restored
     local tp = tilePool.getObjects()
     local groups = {}
     local count
     for _,color in ipairs(colors) do
         groups[color] = filterTable(tp, function(k,v) return v.name == color end)
         count = #groups[color]
-        print(color, '=>',count)
+        --print(color, '=>',count)
         if count < 20 then
             spawnTiles(color, 20-count)
         else
@@ -207,7 +223,7 @@ function refreshSupply() -- ensure that bag has exactly 20 of each tile
     end
     local extraStuff = filterTable(tp, function(k,v) return not colors[v.name]  end)  -- get stuff that isn't a tile
     for i, stuff in ipairs(extraStuff) do
-        print ('taking ', i, '=', stuff.guid)
+        --print ('taking ', i, '=', stuff.guid)
         tilePool.takeObject({guid=stuff.guid, position=Vector(-20+4*i, 10, 0)})
     end
 end
@@ -222,6 +238,7 @@ function spawnTiles(color, count)
      scale={1,1,1},
      callback_function = function(obj) tilePool.putObject(obj) end,
     }
+    local obj
     for i=1,count do
         obj = spawnObject(params)
         obj.setCustomObject(objectSpawnParams[color])
@@ -285,7 +302,7 @@ function distributeTiles()  -- actually spread them out
             end
         end
     end
-    printPosition(startToken.getPosition(), 'startToken')
+    --printPosition(startToken.getPosition(), 'startToken')
     Wait.time(function() distributing = false end, 3.0)
 end
 
@@ -323,7 +340,7 @@ function createCenterZone()
     followerZones[thisZone] = true
 end
 
-function createCardScriptingZones()
+function createCardScriptingZones()  -- zones for all areas on cards except for scoring grid
     local zonePosition = Vector(4.4, 0, 1.33)
     cxPos = cardx.getPosition()  -- global for debugging/testing
     local params = {
@@ -348,7 +365,7 @@ function createCardScriptingZones()
     end
 end
 
-function eraseScriptingZones()
+function eraseScriptingZones() -- Erase all of them everywhere
     local allobj = getAllObjects() -- global object
     for _, o in ipairs(allobj) do
         if (o.tag == 'Scripting') then o.destruct() end
@@ -424,7 +441,7 @@ function getCast(pos, radius)
         max_distance = 0,
         debug        = false,
     }
-    hitList = Physics.cast(params)
+    local hitList = Physics.cast(params)
     local objList = {}
 --    pdump(hitlist)
     for _,h in ipairs(hitList) do
@@ -440,10 +457,10 @@ function getCast(pos, radius)
 end
 
 function onScriptingButtonDown(index, player_color)  -- testing
-    print('Pressed button ', index)
-     if tostring(index) == '1' then removeExtraFactories() end
-     if tostring(index) == '2' then refreshSupply() end
-    if tostring(index) == '3' then spawnFactory() end
+    -- print('Pressed button ', index)
+    --  if tostring(index) == '1' then removeExtraFactories() end
+    --  if tostring(index) == '2' then refreshSupply() end
+    -- if tostring(index) == '3' then spawnFactory() end
     -- if tostring(index) == '4' then transferBags(discards, tilePool, 0.02) end
 end
 
